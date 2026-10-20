@@ -1,0 +1,40 @@
+# Sony BRAVIA 4K (UR3?) - op maat gemaakt uit jouw `pm list packages`, gebaseerd op
+# examples/sony-bravia-4k-ur2/debloat.txt van cleanyourtv. Alles wordt UITGEZET, niet verwijderd.
+#
+# Toepassen:  TV_HOST=192.168.1.201 tools/disable.sh /pad/naar/telebro/tv/debloat.txt
+# Terugdraaien: TV_HOST=192.168.1.201 tools/restore.sh /pad/naar/telebro/tv/debloat.txt
+#
+# BEWUST NIET erin (nodig voor je Mac-app en de tv zelf):
+#   com.google.android.apps.mediashell   = Chromecast built-in (cast vanaf Mac)
+#   com.sony.dtv.airplayapp              = AirPlay (stream vanaf Mac)
+#   com.sonyericsson.dlna / com.sony.huey.dlna.*  = DLNA
+#   com.google.android.tungsten.setupwraith       = kan Wi-Fi/ADB kosten, laten staan
+#   com.google.android.tvlauncher        = stock launcher, pas uit NA een werkende nieuwe launcher
+
+# --- Batch 1: al door jou toegepast (zelfde lijst als eerder) ---
+tv.samba.ssm
+com.sonyericsson.idd.agent
+com.sony.dtv.promos
+com.sony.dtv.sonyselect
+com.google.android.tvrecommendations
+com.sony.dtv.demosupport
+com.sony.dtv.demosystemsupport
+com.sony.dtv.multiscreendemo
+com.google.android.feedback
+com.google.android.tv.bugreportsender
+com.sony.dtv.youview
+com.google.android.music
+
+# --- Batch 2: uit de UR2-lijst, nog NIET getest op jouw tv. Zet maximaal een paar tegelijk aan ---
+com.qterics.da.product
+com.sony.dtv.da.service
+com.google.android.youtube.tvmusic
+com.google.android.play.games
+com.google.android.videos
+
+# --- Alleen aanzetten als je ze echt niet gebruikt (haal # weg) ---
+# com.apple.atve.sony.appletv        # Apple TV-app
+# com.sony.dtv.livingfit             # Sony Living Fit
+# com.google.android.katniss         # spraakbediening (microfoonknop)
+# com.google.android.tv.assistant
+# com.sony.dtv.assistantadapter
