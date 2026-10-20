@@ -1,7 +1,7 @@
 {
   "name": "telebro",
-  "version": "0.1.0",
-  "description": "Eigen mediabibliotheek op de Mac die direct naar je Sony Bravia streamt",
+  "version": "0.2.0",
+  "description": "Mediahub op de Mac: bibliotheek, downloaden en streamen naar je Sony Bravia",
   "main": "src/main/main.js",
   "scripts": {
     "start": "electron .",
@@ -12,17 +12,37 @@
     "bonjour-service": "^1.3.0",
     "castv2-client": "^1.2.0",
     "ffmpeg-static": "^5.2.0",
-    "ffprobe-static": "^3.1.0"
+    "ffprobe-static": "^3.1.0",
+    "webtorrent": "^3.0.21"
   },
   "devDependencies": {
-    "electron": "^33.2.0",
-    "electron-builder": "^25.1.8"
+    "electron": "^44.9.1",
+    "electron-builder": "^26.15.3"
   },
   "build": {
     "appId": "nl.michel.telebro",
     "productName": "Telebro",
-    "files": ["src/**/*", "package.json"],
-    "asarUnpack": ["node_modules/ffmpeg-static/**", "node_modules/ffprobe-static/**"],
-    "mac": { "category": "public.app-category.video", "target": [{ "target": "dmg", "arch": ["arm64", "x64"] }] }
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "node_modules/ffmpeg-static/**",
+      "node_modules/ffprobe-static/**",
+      "node_modules/node-datachannel/**"
+    ],
+    "mac": {
+      "category": "public.app-category.video",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ]
+    },
+    "npmRebuild": false
   }
 }

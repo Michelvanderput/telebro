@@ -31,12 +31,14 @@ function sidecarSubs(file) {
 }
 
 function scan(folders) {
-  const items = [];
-  for (const folder of folders) {
+  const items = []; const seen = new Set();
+  for (const folder of new Set(folders)) {
     for (const file of walk(folder)) {
-      let size = 0;
-      try { size = fs.statSync(file).size; } catch { continue; }
-      items.push({ id: idOf(file), file, size, ...parseName(file), sidecars: sidecarSubs(file) });
+      if (seen.has(file)) continue;
+      seen.add(file);
+      let st;
+      try { st = fs.statSync(file); } catch { continue; }
+      items.push({ id: idOf(file), file, size: st.size, added: Math.round(st.mtimeMs), ...parseName(file), sidecars: sidecarSubs(file) });
     }
   }
   items.sort((a, b) =>
