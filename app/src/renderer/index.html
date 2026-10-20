@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'">
+<title>Telebro</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="drag">
+  <h1>Telebro</h1>
+  <input id="search" type="search" placeholder="Zoek film of serie…" autocomplete="off">
+  <nav id="tabs"><button data-t="all" class="on">Alles</button><button data-t="movie">Films</button><button data-t="series">Series</button></nav>
+  <div class="spacer"></div>
+  <select id="device" title="Tv"><option value="">Tv zoeken…</option></select>
+  <button id="addFolder">+ Map</button>
+</header>
+<main>
+  <section id="grid"></section>
+  <aside id="detail" hidden>
+    <button id="close" class="x">×</button>
+    <h2 id="dTitle"></h2>
+    <p id="dMeta" class="muted"></p>
+    <label>Audio<select id="dAudio"></select></label>
+    <label>Ondertiteling<select id="dSub"></select></label>
+    <p id="dPlan" class="muted"></p>
+    <button id="dPlay" class="primary">▶ Speel af op tv</button>
+  </aside>
+</main>
+<footer id="bar" hidden>
+  <div id="nowTitle"></div>
+  <button id="pp">❚❚</button>
+  <span id="t0">0:00</span>
+  <input id="seek" type="range" min="0" max="1000" value="0">
+  <span id="t1">0:00</span>
+  <input id="vol" type="range" min="0" max="100" value="50" title="Volume">
+  <button id="stop">■</button>
+</footer>
+<div id="toast" hidden></div>
+<script src="app.js"></script>
+</body>
+</html>
