@@ -14,7 +14,7 @@ function el(tag, props = {}, ...kids) {
     if (k === 'class') e.className = v;
     else if (k === 'text') e.textContent = v;
     else if (k === 'style') e.style.cssText = v;
-    else if (k.startsWith('on')) e[k] = v;
+    else if (k.startsWith('on')) e[k] = (ev) => { v(ev); }; // return false zou het event annuleren (toetsen!)
     else if (k in e && k !== 'list') e[k] = v;
     else e.setAttribute(k, v);
   }
@@ -130,7 +130,7 @@ function viewDownloads() {
   setTimeout(() => { renderDownloadList(); refreshDownloads(); });
   return [el('h2', { text: 'Downloads' }),
     el('div', { class: 'addbox' },
-      el('div', { class: 'line' }, el('input', { id: 'magnet', type: 'text', placeholder: 'Plak een magnet-link…', onkeydown: (e) => e.key === 'Enter' && addMagnet() }),
+      el('div', { class: 'line' }, el('input', { id: 'magnet', type: 'text', placeholder: 'Plak een magnet-link…', onkeydown: (e) => { if (e.key === 'Enter') addMagnet(); } }),
         el('button', { class: 'primary', text: 'Toevoegen', onclick: addMagnet }),
         el('button', { text: '.torrent kiezen', onclick: async () => { try { if (await window.tv.dlAddFile()) toast('Download gestart'); } catch (e) { fail(e); } } })),
       el('div', { class: 'legal', text: `Sleep een .torrent-bestand of magnet-link ook ergens in het venster. Downloads komen in ${S.settings.downloadDir || 'je downloadmap'} en verschijnen daarna automatisch in je bibliotheek. Gebruik dit alleen voor bestanden waarvoor je de rechten hebt. Delen na afloop staat uit.`, })),
@@ -172,7 +172,7 @@ function viewDiscover() {
   setTimeout(renderDiscover);
   return [el('h2', { text: 'Ontdekken' }),
     el('div', { class: 'addbox' }, el('div', { class: 'line' },
-      el('input', { id: 'dq', type: 'text', placeholder: 'Zoek een film of serie…', value: (S.disc && S.disc.q) || '', onkeydown: (e) => e.key === 'Enter' && runSearch(e.target.value) }),
+      el('input', { id: 'dq', type: 'text', placeholder: 'Zoek een film of serie…', value: (S.disc && S.disc.q) || '', onkeydown: (e) => { if (e.key === 'Enter') runSearch(e.target.value); } }),
       el('button', { class: 'primary', text: 'Zoeken', onclick: () => runSearch($('#dq').value) })),
       el('div', { class: 'legal', text: 'Zie waar een titel legaal te streamen is (TMDB) en download gratis films uit het publiek domein (Internet Archive).' })),
     el('div', { id: 'discRes' })];
