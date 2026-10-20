@@ -64,6 +64,23 @@
     return show.episodes.find((e) => !watched[e.id]) || show.episodes[0];
   }
 
-  const api = { fmt, bytes, eta, epCode, metaKey, groupLibrary, nextEpisode, continueWatching, upNext };
+  const DAY = 86400000;
+  // Dagen tot automatisch opruimen; null = wordt nooit opgeruimd. Alleen gedownloade ("managed") en gekeken
+  // bestanden zonder Bewaren-vlag tellen mee. Een oud 'true' in plaats van een tijdstip start nu pas de klok.
+  function daysLeft(item, watched, keep, cleanup, now = Date.now()) {
+    if (!cleanup || !cleanup.enabled || !item.managed || (keep && keep[item.id])) return null;
+    const w = watched[item.id];
+    if (!w) return null;
+    const at = typeof w === 'number' ? w : now;
+    return Math.ceil((at + cleanup.days * DAY - now) / DAY);
+  }
+  // 'nieuw' | 'bezig' | 'gezien' voor een film of (alle afleveringen van) een serie
+  function status(entry, positions, watched) {
+    const list = entry.episodes || [entry];
+    if (list.every((i) => watched[i.id])) return 'gezien';
+    return list.some((i) => watched[i.id] || positions[i.id]) ? 'bezig' : 'nieuw';
+  }
+
+  const api = { daysLeft, status, fmt, bytes, eta, epCode, metaKey, groupLibrary, nextEpisode, continueWatching, upNext };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.lib = api;
 })(typeof self !== 'undefined' ? self : globalThis);

@@ -94,3 +94,6 @@ kbd{background:var(--panel2);border:1px solid var(--line);border-bottom-width:2p
 #toast{position:fixed;bottom:92px;left:50%;transform:translateX(-50%);background:var(--panel2);border:1px solid var(--line);padding:10px 18px;border-radius:11px;z-index:50;box-shadow:0 10px 30px #000a;max-width:70vw}
 #toast.err{border-color:#6b2b45;background:#2a1620}
 [hidden]{display:none!important}
+
+.chk{display:flex;align-items:center;gap:8px;white-space:nowrap}input[type=checkbox]{accent-color:var(--accent);width:16px;height:16px}
+.card>button{margin-top:4px;padding:5px 10px;font-size:12px}

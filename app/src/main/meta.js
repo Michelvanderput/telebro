@@ -34,4 +34,4 @@ async function fillMissing(items, cache, key, keyOf, { fetchFn = fetch, onProgre
   return cache;
 }
 
-module.exports = { lookup, fillMissing };
+module.exports = { lookup, fillMissing, headers };

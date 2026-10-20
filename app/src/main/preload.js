@@ -4,6 +4,8 @@ const on = (c) => (cb) => ipcRenderer.on(c, (_e, d) => cb(d));
 contextBridge.exposeInMainWorld('tv', {
   library: inv('library:get'), addFolder: inv('library:addFolder'), removeFolder: inv('library:removeFolder'),
   rescan: inv('library:rescan'), markWatched: inv('library:markWatched'),
+  setKeep: inv('library:setKeep'), setCleanup: inv('settings:setCleanup'), cleanupRun: inv('cleanup:run'),
+  search: inv('discover:search'), providers: inv('discover:providers'), archiveDownload: inv('discover:download'),
   setTmdb: inv('settings:setTmdb'), chooseDownloadDir: inv('settings:chooseDownloadDir'),
   info: inv('media:info'), devices: inv('cast:devices'), play: inv('cast:play'), pause: inv('cast:pause'),
   resume: inv('cast:resume'), stop: inv('cast:stop'), seek: inv('cast:seek'), volume: inv('cast:volume'),

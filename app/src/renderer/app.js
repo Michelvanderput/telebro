@@ -1,8 +1,8 @@
 const $ = (s) => document.querySelector(s);
-const { fmt, bytes, eta, epCode, metaKey, groupLibrary, nextEpisode, continueWatching, upNext } = window.lib;
+const { fmt, bytes, eta, epCode, metaKey, groupLibrary, nextEpisode, continueWatching, upNext, daysLeft, status } = window.lib;
 
 const S = {
-  items: [], positions: {}, watched: {}, meta: {}, folders: [], settings: {}, downloads: [],
+  items: [], positions: {}, watched: {}, keep: {}, meta: {}, filter: 'all', disc: null, folders: [], settings: {}, downloads: [],
   view: 'home', q: '', device: '', sort: 'title', now: null, devices: [],
 };
 
@@ -50,7 +50,8 @@ function card(entry) {
   const m = metaOf(entry);
   const watchedAll = isShow ? entry.episodes.every((e) => S.watched[e.id]) : S.watched[entry.id];
   const sub = isShow ? `${entry.episodes.length} afl. · ${entry.seasons.length} seizoen${entry.seasons.length > 1 ? 'en' : ''}` : [m.year || entry.year, m.rating ? `★ ${m.rating}` : ''].filter(Boolean).join(' · ');
-  const extra = [watchedAll ? el('span', { class: 'badge ok', text: '✓' }) : null, isShow ? null : progressBar(entry.id)];
+  const left = isShow ? null : daysLeft(entry, S.watched, S.keep, S.settings.cleanup);
+  const extra = [watchedAll ? el('span', { class: 'badge ok', text: left != null ? `✓ ${Math.max(0, left)}d` : '✓', title: left != null ? 'Dagen tot opruimen' : 'Gezien' }) : null, isShow ? null : progressBar(entry.id)];
   return el('div', { class: 'card', onclick: () => openDetail(entry) }, poster(entry, extra),
     el('div', { class: 't', text: entry.title }), el('div', { class: 's', text: sub }));
 }
@@ -95,7 +96,10 @@ function viewHome() {
   return v;
 }
 function sortControl() {
-  return el('div', { class: 'bar2' }, el('span', { class: 's', text: 'Sorteer' }), (() => {
+  const f = el('select', { onchange: (e) => { S.filter = e.target.value; render(); } },
+    ...[['all', 'Alles'], ['nieuw', 'Nieuw'], ['bezig', 'Bezig'], ['gezien', 'Gezien']].map(([v, t]) => el('option', { value: v, text: t })));
+  f.value = S.filter;
+  return el('div', { class: 'bar2' }, el('span', { class: 's', text: 'Status' }), f, el('span', { class: 's', text: 'Sorteer' }), (() => {
     const s = el('select', { onchange: (e) => { S.sort = e.target.value; render(); } },
       el('option', { value: 'title', text: 'Titel' }), el('option', { value: 'recent', text: 'Recent toegevoegd' }), el('option', { value: 'rating', text: 'Beoordeling' }));
     s.value = S.sort; return s;
@@ -104,13 +108,14 @@ function sortControl() {
 const sorter = () => ({
   title: (a, b) => a.title.localeCompare(b.title), recent: (a, b) => (b.added || 0) - (a.added || 0),
   rating: (a, b) => (metaOf(b).rating || 0) - (metaOf(a).rating || 0) }[S.sort]);
+const inFilter = (e) => S.filter === 'all' || status(e, S.positions, S.watched) === S.filter;
 function viewMovies() {
-  const list = groupLibrary(S.items).movies.filter((m) => matches(m.title)).sort(sorter());
+  const list = groupLibrary(S.items).movies.filter((m) => matches(m.title) && inFilter(m)).sort(sorter());
   if (!S.items.length) return [emptyState()];
   return [el('h2', { text: 'Films', }, el('small', { text: `${list.length}` })), sortControl(), el('div', { class: 'grid' }, list.map(card))];
 }
 function viewSeries() {
-  const list = groupLibrary(S.items).shows.filter((m) => matches(m.title)).sort(sorter());
+  const list = groupLibrary(S.items).shows.filter((m) => matches(m.title) && inFilter(m)).sort(sorter());
   if (!S.items.length) return [emptyState()];
   return [el('h2', { text: 'Series' }, el('small', { text: `${list.length}` })), sortControl(), el('div', { class: 'grid' }, list.map(card))];
 }
@@ -157,6 +162,62 @@ async function removeDl(d, del) {
 }
 async function refreshDownloads() { try { S.downloads = await window.tv.dlList(); renderDownloadList(); } catch {} }
 
+async function runSearch(q) {
+  q = q.trim(); if (!q) return;
+  S.disc = { q, loading: true }; renderDiscover();
+  try { S.disc = { q, ...(await window.tv.search(q)) }; } catch (e) { S.disc = { q, tmdb: null, archive: [], archiveError: String(e.message || e) }; }
+  renderDiscover();
+}
+function viewDiscover() {
+  setTimeout(renderDiscover);
+  return [el('h2', { text: 'Ontdekken' }),
+    el('div', { class: 'addbox' }, el('div', { class: 'line' },
+      el('input', { id: 'dq', type: 'text', placeholder: 'Zoek een film of serie…', value: (S.disc && S.disc.q) || '', onkeydown: (e) => e.key === 'Enter' && runSearch(e.target.value) }),
+      el('button', { class: 'primary', text: 'Zoeken', onclick: () => runSearch($('#dq').value) })),
+      el('div', { class: 'legal', text: 'Zie waar een titel legaal te streamen is (TMDB) en download gratis films uit het publiek domein (Internet Archive).' })),
+    el('div', { id: 'discRes' })];
+}
+function discCard(r) {
+  const p = el('div', { class: 'poster', style: r.poster ? '' : `background:${gradient(r.title || '?')}` });
+  if (r.poster) p.append(el('img', { src: r.poster, alt: '', loading: 'lazy' })); else p.append(el('b', { text: r.title }));
+  return p;
+}
+function renderDiscover() {
+  const box = $('#discRes'); if (!box) return;
+  const d = S.disc;
+  if (!d) { box.replaceChildren(); return; }
+  if (d.loading) { box.replaceChildren(el('div', { class: 'legal', style: 'margin-top:18px', text: 'Zoeken…' })); return; }
+  const parts = [];
+  parts.push(el('h2', { text: 'Waar kijk je het?' }, el('small', { text: 'TMDB' })));
+  if (d.tmdb == null) parts.push(el('div', { class: 'legal', text: d.tmdbError || 'Voeg bij Instellingen een TMDB-sleutel toe om te zien waar titels te streamen zijn.' }));
+  else if (!d.tmdb.length) parts.push(el('div', { class: 'legal', text: 'Niets gevonden.' }));
+  else parts.push(el('div', { class: 'grid' }, d.tmdb.map((r) => el('div', { class: 'card', onclick: () => openTitle(r) }, discCard(r),
+    el('div', { class: 't', text: r.title }), el('div', { class: 's', text: [r.kind === 'tv' ? 'Serie' : 'Film', r.year, r.rating ? `★ ${r.rating}` : ''].filter(Boolean).join(' · ') })))));
+  parts.push(el('h2', { text: 'Gratis en legaal downloaden' }, el('small', { text: 'Internet Archive' })));
+  if (d.archiveError) parts.push(el('div', { class: 'legal', text: d.archiveError }));
+  else if (!d.archive.length) parts.push(el('div', { class: 'legal', text: 'Niets gevonden in het publiek domein.' }));
+  else parts.push(el('div', { class: 'grid' }, d.archive.map((r) => {
+    const p = el('div', { class: 'poster', style: `background:${gradient(r.title || r.id)}` }, el('img', { src: r.thumb, alt: '', loading: 'lazy' }));
+    return el('div', { class: 'card' }, p, el('div', { class: 't', text: r.title, title: r.title }), el('div', { class: 's', text: [r.year, `${r.downloads.toLocaleString('nl-NL')}× gedownload`].filter(Boolean).join(' · ') }),
+      el('button', { text: '↓ Downloaden', onclick: async (e) => { e.target.disabled = true; try { await window.tv.archiveDownload(r.id); toast('Download gestart'); refreshDownloads(); } catch (err) { fail(err); } e.target.disabled = false; } }));
+  })));
+  box.replaceChildren(...parts);
+}
+async function openTitle(r) {
+  const m = $('#modal');
+  const sheet = el('div', { class: 'sheet' }, el('button', { class: 'x', text: '×', onclick: closeDetail }),
+    el('div', { class: 'hero', style: `background:${gradient(r.title)}` }, discCard(r),
+      el('div', { class: 'info' }, el('h1', { text: r.title }), el('div', { class: 'meta' }, el('span', { text: r.kind === 'tv' ? 'Serie' : 'Film' }), r.year ? el('span', { text: r.year }) : null, r.rating ? el('span', { class: 'star', text: `★ ${r.rating}` }) : null),
+        el('div', { class: 'over', text: r.overview || 'Geen omschrijving.' }), el('div', { id: 'prov', class: 'plan', style: 'padding:0', text: 'Zoeken waar je dit kunt kijken…' }))));
+  m.replaceChildren(sheet); m.hidden = false; D = null;
+  try {
+    const p = await window.tv.providers(r.kind, r.id);
+    const line = (t, a) => (a.length ? `${t}: ${a.join(', ')}` : null);
+    const txt = [line('Streamen', p.flatrate), line('Huren', p.rent), line('Kopen', p.buy)].filter(Boolean).join('  ·  ');
+    $('#prov').textContent = txt || 'Niet beschikbaar bij Nederlandse aanbieders.';
+  } catch (e) { $('#prov').textContent = String(e.message || e); }
+}
+
 function viewSettings() {
   const folderLine = (f) => el('div', { class: 'line' }, el('div', { class: 'path', text: f }),
     el('button', { class: 'danger', text: 'Verwijder', onclick: async () => applySnapshot(await window.tv.removeFolder(f), true) }));
@@ -167,6 +228,17 @@ function viewSettings() {
     el('div', { class: 'sec' }, el('h3', { text: 'Downloadmap' }), el('p', { text: 'Hier komen je downloads. Deze map wordt altijd meegescand.' }),
       el('div', { class: 'line' }, el('div', { class: 'path', text: S.settings.downloadDir || '' }),
         el('button', { text: 'Wijzigen…', onclick: async () => applySnapshot(await window.tv.chooseDownloadDir(), true) }))),
+    (() => {
+      const c = S.settings.cleanup || { enabled: false, days: 3 };
+      const days = el('select', { onchange: save }, ...[1, 3, 7, 14, 30].map((n) => el('option', { value: n, text: `${n} dag${n === 1 ? '' : 'en'}` })));
+      const on = el('input', { type: 'checkbox', checked: c.enabled, onchange: save });
+      days.value = String(c.days);
+      async function save() { applySnapshot(await window.tv.setCleanup({ enabled: on.checked, days: +days.value }), true); }
+      return el('div', { class: 'sec' }, el('h3', { text: 'Automatisch opruimen' }),
+        el('p', { text: 'Gekeken downloads gaan na een aantal dagen naar de prullenbak, zodat je schijf niet volloopt. Alleen bestanden in de downloadmap; je eigen mappen en alles met ☆ Bewaren blijven staan. Je kunt het uit de prullenbak terughalen.' }),
+        el('div', { class: 'line' }, el('label', { class: 'chk' }, on, ' Opruimen na '), days, el('div', { class: 'grow' }),
+          el('button', { text: 'Nu opruimen', onclick: async () => { try { await window.tv.cleanupRun(); } catch (e) { fail(e); } } })));
+    })(),
     el('div', { class: 'sec' }, el('h3', { text: 'Posters en omschrijvingen (TMDB)' }),
       el('p', { text: S.settings.hasTmdb ? 'Sleutel ingesteld. Metadata wordt automatisch opgehaald.' : 'Maak een gratis account op themoviedb.org, ga naar Instellingen → API en plak hier je sleutel (API-sleutel of Read Access Token).' }),
       el('div', { class: 'line' }, el('input', { id: 'tmdb', type: 'password', placeholder: S.settings.hasTmdb ? '••••••••  (vervangen)' : 'TMDB-sleutel' }),
@@ -179,10 +251,10 @@ function viewSettings() {
 
 function render() {
   document.querySelectorAll('#nav button').forEach((b) => b.classList.toggle('on', b.dataset.v === S.view));
-  const views = { home: viewHome, movies: viewMovies, series: viewSeries, downloads: viewDownloads, settings: viewSettings };
+  const views = { home: viewHome, movies: viewMovies, series: viewSeries, discover: viewDiscover, downloads: viewDownloads, settings: viewSettings };
   const v = $('#view'); const top = v.scrollTop;
   v.replaceChildren(...[].concat(views[S.view]()));
-  if (S.view !== 'downloads') v.scrollTop = top;
+  if (S.view !== 'downloads' && S.view !== 'discover') v.scrollTop = top;
 }
 const go = (view) => { S.view = view; render(); };
 
@@ -241,10 +313,14 @@ function drawDetail() {
   sheet.append(el('div', { class: 'opts' }, el('label', { text: 'Audio' }, audio), el('label', { text: 'Ondertiteling' }, sub)));
   sheet.append(el('div', { class: 'plan', text: !info ? 'Bestand lezen…' : info.plan.mode === 'direct' ? 'Speelt direct af: geen verwerking nodig.'
     : `Wordt licht verwerkt (${info.plan.video === 'copy' ? 'video ongewijzigd' : 'video omzetten'}, audio ${info.plan.audio === 'copy' ? 'ongewijzigd' : 'omzetten'}).` }));
+  const left = daysLeft(item, S.watched, S.keep, S.settings.cleanup);
+  if (left != null) sheet.append(el('div', { class: 'plan', text: left > 0 ? `Gekeken: gaat over ${left} dag${left === 1 ? '' : 'en'} naar de prullenbak (tenzij je op Bewaren klikt).` : 'Gekeken: gaat bij de volgende opruimronde naar de prullenbak.' }));
   const resume = pos && pos.t > 30;
   sheet.append(el('div', { class: 'actions' },
     el('button', { class: 'primary', disabled: !info, text: resume ? `▶ Hervat vanaf ${fmt(pos.t)}` : '▶ Afspelen op tv', onclick: (e) => play(resume ? pos.t : 0, e.target) }),
     resume ? el('button', { text: 'Vanaf het begin', onclick: (e) => play(0, e.target) }) : null,
+    item.managed ? el('button', { text: S.keep[item.id] ? '★ Bewaard' : '☆ Bewaren', title: 'Nooit automatisch opruimen',
+      onclick: async () => { applySnapshot(await window.tv.setKeep(item.id, !S.keep[item.id])); drawDetail(); } }) : null,
     el('button', { text: S.watched[item.id] ? 'Markeer als ongezien' : 'Markeer als gezien',
       onclick: async () => { applySnapshot(await window.tv.markWatched(item.id, !S.watched[item.id])); drawDetail(); } })));
   const modal = $('#modal'); const sc = modal.scrollTop;
@@ -279,7 +355,7 @@ async function addFolder() { try { applySnapshot(await window.tv.addFolder(), tr
 async function rescan() { applySnapshot(await window.tv.rescan(), true); toast('Bibliotheek bijgewerkt'); }
 function applySnapshot(s, rerender) {
   if (!s) return;
-  Object.assign(S, { items: s.items, folders: s.folders, positions: s.positions, watched: s.watched, meta: s.meta, settings: s.settings });
+  Object.assign(S, { items: s.items, folders: s.folders, positions: s.positions, watched: s.watched, keep: s.keep || {}, meta: s.meta, settings: s.settings });
   if (s.lastDevice && !S.device && S.devices.some((d) => d.host === s.lastDevice)) { S.device = s.lastDevice; $('#device').value = S.device; }
   if (rerender) render();
 }
@@ -295,7 +371,7 @@ function setDevices(list) {
 
 // ---------- events ----------
 $('#nav').onclick = (e) => { const b = e.target.closest('button'); if (b) go(b.dataset.v); };
-$('#search').oninput = (e) => { S.q = e.target.value; if (S.view === 'downloads' || S.view === 'settings') S.view = 'home'; render(); };
+$('#search').oninput = (e) => { S.q = e.target.value; if (['downloads', 'settings', 'discover'].includes(S.view)) S.view = 'home'; render(); };
 $('#rescan').onclick = rescan;
 $('#device').onchange = (e) => { S.device = e.target.value; };
 $('#modal').onclick = (e) => { if (e.target.id === 'modal') closeDetail(); };

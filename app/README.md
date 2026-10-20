@@ -11,7 +11,9 @@ Je eigen mediahub op de Mac: bibliotheek, series per seizoen, verder kijken, dow
 - **Detail:** audio kiezen, ondertitels (los bestand of ingebouwd), hervatten waar je gebleven was, markeren als gezien.
 - **Series kijken:** na een aflevering start de volgende automatisch, of via de knop ⏭ in de balk.
 - **Downloads:** magnet-link plakken of een `.torrent` slepen. Voortgang, snelheid en peers live. Klaar? Dan staat het meteen in je bibliotheek.
-- **Zoeken** met `/`, pauze met de spatiebalk.
+- **Ontdekken:** zoek een titel en zie in welke streamingdienst hij in Nederland staat (TMDB), of download gratis films uit het publiek domein via het Internet Archive. Met één klik, via de ingebouwde torrentclient.
+- **Status en opruimen:** filter op Nieuw / Bezig / Gezien. Gekeken downloads kunnen na 1, 3, 7, 14 of 30 dagen automatisch naar de prullenbak (zie hieronder).
+- **Zoeken** in je bibliotheek met `/`, pauze met de spatiebalk.
 
 ## Starten (op de Mac)
 ```bash
@@ -30,6 +32,19 @@ bewust **geen zoekfunctie** voor torrentsites. Gebruik het alleen voor content w
 zoals je eigen bestanden, publiek domein of open films. Standaardmap: `~/Movies/Telebro` (aanpasbaar bij
 Instellingen). Na afloop stopt het delen (seeden); de bestanden blijven staan. Onderbroken downloads
 hervatten bij de volgende start.
+
+## Automatisch opruimen
+Staat standaard **uit**. Zet je het aan bij Instellingen, dan gaat een gekeken download na N dagen naar de
+**prullenbak** (dus terug te halen). Veiligheid:
+- alleen bestanden in de downloadmap, nooit je eigen bibliotheekmappen;
+- nooit iets wat je met **☆ Bewaren** hebt gemarkeerd;
+- de teller begint pas bij "gezien" (na 93% of via Markeer als gezien) en staat als ✓ 2d op de poster en in het detailscherm;
+- een lege torrent-map wordt mee opgeruimd. Elk pad wordt nog eens gecontroleerd tegen de downloadmap.
+
+## Zoeken en legaal downloaden
+Er is bewust **geen zoekfunctie voor torrentsites**. "Ontdekken" gebruikt TMDB (waar te streamen, vereist de sleutel hieronder)
+en het Internet Archive (publiek domein, Creative Commons). Sommige archive-items zijn beveiligd of tijdelijk onbereikbaar;
+de app meldt dat en probeert een 503 zelf nog twee keer.
 
 ## Posters en omschrijvingen (optioneel)
 Maak een gratis account op themoviedb.org, ga naar Instellingen → API en plak je sleutel bij
@@ -58,8 +73,8 @@ Afbeeldingsondertitels (PGS/VobSub) worden nog niet ondersteund.
 - `test/` `npm test`: unit tests, een echte ffmpeg-keten, en een echte torrent-download tussen twee lokale clients
 
 ## Status
-Getest (`npm test`, 24 tests): bestandsherkenning, afspeelplan, ffmpeg-remux, Range/HLS/VTT-server, series groeperen,
-verder kijken, volgende aflevering, TMDB-vertaling en een complete torrent-download.
+Getest (`npm test`, 34 tests): bestandsherkenning, afspeelplan, ffmpeg-remux, Range/HLS/VTT-server, series groeperen,
+verder kijken, volgende aflevering, TMDB-vertaling, opruimlogica (met een echte map in een tijdelijke map), de Internet Archive-API (ook live gecontroleerd) en een complete torrent-download.
 De interface is in headless Chromium doorlopen met een nagebootste backend (geen scriptfouten, flow werkt).
 
 **Nog niet getest:** het draaien in Electron zelf en het echt afspelen op jouw tv. Dat kon in de cloud niet.

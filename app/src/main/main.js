@@ -10,10 +10,12 @@ const { createServer, lanIp } = require('./server');
 const { CastController } = require('./cast');
 const { TorrentManager } = require('./torrents');
 const { fillMissing } = require('./meta');
+const discover = require('./discover');
+const { runCleanup } = require('./cleanup');
 const lib = require('../renderer/lib.js');
 
 const PORT = 8765;
-const DEFAULTS = { folders: [], lastDevice: null, downloadDir: null, tmdbKey: '', positions: {}, watched: {}, torrents: [], meta: {} };
+const DEFAULTS = { folders: [], lastDevice: null, downloadDir: null, tmdbKey: '', positions: {}, watched: {}, keep: {}, cleanup: { enabled: false, days: 3 }, torrents: [], meta: {} };
 const cast = new CastController();
 let win;
 let cfg = { ...DEFAULTS };
@@ -26,21 +28,27 @@ let torrents = null;
 let lastSave = 0;
 
 const cfgFile = () => path.join(app.getPath('userData'), 'config.json');
-const loadCfg = () => { try { return { ...DEFAULTS, ...JSON.parse(fs.readFileSync(cfgFile(), 'utf8')) }; } catch { return { ...DEFAULTS }; } };
+const loadCfg = () => {
+  let c;
+  try { c = { ...DEFAULTS, ...JSON.parse(fs.readFileSync(cfgFile(), 'utf8')) }; } catch { c = { ...DEFAULTS }; }
+  for (const k of Object.keys(c.watched)) if (c.watched[k] === true) c.watched[k] = Date.now(); // oude vlag -> tijdstip
+  return c;
+};
 let saveTimer;
 const saveCfg = () => { clearTimeout(saveTimer); saveTimer = setTimeout(() => {
   try { fs.writeFileSync(cfgFile(), JSON.stringify(cfg, null, 2)); } catch (e) { console.error('config opslaan mislukt', e.message); } }, 300); };
 const send = (ch, d) => { if (win && !win.isDestroyed()) win.webContents.send(ch, d); };
 
 function refreshLibrary() {
-  items = scan([...cfg.folders, cfg.downloadDir]);
+  const dl = path.resolve(cfg.downloadDir) + path.sep;
+  items = scan([...cfg.folders, cfg.downloadDir]).map((i) => ({ ...i, managed: path.resolve(i.file).startsWith(dl) }));
   byId.clear();
   items.forEach((i) => byId.set(i.id, i));
   return items;
 }
 const snapshot = () => ({
-  items, folders: cfg.folders, lastDevice: cfg.lastDevice, positions: cfg.positions, watched: cfg.watched, meta: cfg.meta,
-  settings: { downloadDir: cfg.downloadDir, hasTmdb: !!cfg.tmdbKey },
+  items, folders: cfg.folders, lastDevice: cfg.lastDevice, positions: cfg.positions, watched: cfg.watched, keep: cfg.keep, meta: cfg.meta,
+  settings: { downloadDir: cfg.downloadDir, hasTmdb: !!cfg.tmdbKey, cleanup: cfg.cleanup },
 });
 
 let metaBusy = false;
@@ -133,14 +141,14 @@ function onCastStatus(s) {
   if (s.playerState === 'PLAYING' || s.playerState === 'PAUSED') {
     if (now - lastSave > 8000 && time > 20) {
       lastSave = now;
-      if (current.duration && time / current.duration > 0.93) { cfg.watched[current.id] = true; delete cfg.positions[current.id]; }
+      if (current.duration && time / current.duration > 0.93) { cfg.watched[current.id] = Date.now(); delete cfg.positions[current.id]; }
       else cfg.positions[current.id] = { t: Math.floor(time), d: Math.floor(current.duration), at: now };
       saveCfg(); send('progress', { positions: cfg.positions, watched: cfg.watched });
     }
   } else if (s.playerState === 'IDLE' && s.idleReason === 'FINISHED' && !current.finishing) {
     current.finishing = true;
     const done = byId.get(current.id); const host = current.host;
-    cfg.watched[current.id] = true; delete cfg.positions[current.id]; saveCfg();
+    cfg.watched[current.id] = Date.now(); delete cfg.positions[current.id]; saveCfg();
     send('progress', { positions: cfg.positions, watched: cfg.watched });
     const next = lib.nextEpisode(items, done);
     if (next) {
@@ -161,8 +169,23 @@ function wire() {
   });
   h('library:removeFolder', (f) => { cfg.folders = cfg.folders.filter((x) => x !== f); saveCfg(); refreshLibrary(); return snapshot(); });
   h('library:rescan', () => { refreshLibrary(); refreshMeta(); return snapshot(); });
-  h('library:markWatched', (id, v) => { if (v) { cfg.watched[id] = true; delete cfg.positions[id]; } else delete cfg.watched[id]; saveCfg(); return snapshot(); });
+  h('library:markWatched', (id, v) => { if (v) { cfg.watched[id] = Date.now(); delete cfg.positions[id]; } else delete cfg.watched[id]; saveCfg(); return snapshot(); });
 
+  h('library:setKeep', (id, v) => { if (v) cfg.keep[id] = true; else delete cfg.keep[id]; saveCfg(); return snapshot(); });
+  h('settings:setCleanup', (c) => {
+    cfg.cleanup = { enabled: !!c.enabled, days: [1, 3, 7, 14, 30].includes(+c.days) ? +c.days : 3 };
+    saveCfg(); return snapshot();
+  });
+  h('cleanup:run', () => cleanupNow(true));
+  h('discover:search', async (q) => {
+    q = String(q || '').trim();
+    if (!q) return { tmdb: null, archive: [] };
+    const [tmdb, archive] = await Promise.allSettled([cfg.tmdbKey ? discover.tmdbSearch(q, cfg.tmdbKey) : Promise.resolve(null), discover.archiveSearch(q)]);
+    return { tmdb: tmdb.status === 'fulfilled' ? tmdb.value : null, tmdbError: tmdb.status === 'rejected' ? tmdb.reason.message : null,
+      archive: archive.status === 'fulfilled' ? archive.value : [], archiveError: archive.status === 'rejected' ? archive.reason.message : null };
+  });
+  h('discover:providers', (kind, id) => { if (!cfg.tmdbKey) throw new Error('Geen TMDB-sleutel'); return discover.providers(kind, id, cfg.tmdbKey); });
+  h('discover:download', async (id) => torrents.add(await discover.archiveTorrent(String(id))));
   h('settings:setTmdb', (key) => { cfg.tmdbKey = String(key || '').trim(); if (cfg.tmdbKey) { for (const k of Object.keys(cfg.meta)) if (cfg.meta[k].none) delete cfg.meta[k]; } saveCfg(); refreshMeta(); return snapshot(); });
   h('settings:chooseDownloadDir', async () => {
     const r = await dialog.showOpenDialog(win, { properties: ['openDirectory', 'createDirectory'] });
@@ -217,6 +240,17 @@ function wire() {
   cast.on('error', (e) => send('error', String(e.message || e)));
 }
 
+async function cleanupNow(manual) {
+  const removed = await runCleanup({ items, watched: cfg.watched, keep: cfg.keep, cleanup: cfg.cleanup, downloadDir: cfg.downloadDir,
+    trash: (f) => shell.trashItem(f) });
+  for (const r of removed) { delete cfg.watched[r.id]; delete cfg.positions[r.id]; delete cfg.keep[r.id]; }
+  if (removed.length) {
+    saveCfg(); refreshLibrary(); send('library', snapshot());
+    send('toast', `${removed.length} gekeken ${removed.length === 1 ? 'bestand' : 'bestanden'} naar de prullenbak: ${removed.map((r) => r.title).slice(0, 3).join(', ')}`);
+  } else if (manual) send('toast', 'Niets om op te ruimen.');
+  return removed.length;
+}
+
 async function startTorrents() {
   if (!cfg.downloadDir) cfg.downloadDir = path.join(app.getPath('home'), 'Movies', 'Telebro');
   fs.mkdirSync(cfg.downloadDir, { recursive: true });
@@ -242,6 +276,8 @@ app.whenReady().then(async () => {
   win.loadFile(path.join(__dirname, '../renderer/index.html'));
   cast.discover();
   startTorrents().then(refreshMeta);
+  setTimeout(() => cleanupNow(false), 5000);
+  setInterval(() => cleanupNow(false), 60 * 60 * 1000);
 });
 app.on('before-quit', () => {
   stopSessions(); cast.disconnect();
